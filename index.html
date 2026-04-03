@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>GMAA — Impulse Capture</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-user-select:none;user-select:none}
+  body{background:#09090f;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;overflow-x:hidden;display:flex;justify-content:center;min-height:100vh}
+  .phone{max-width:430px;width:100%;min-height:100vh;position:relative;overflow:hidden}
+
+  .ambient{position:absolute;inset:0;pointer-events:none;z-index:0}
+  .ambient div{position:absolute;border-radius:50%;filter:blur(80px)}
+  .amb1{top:-80px;left:50%;transform:translateX(-50%);width:400px;height:400px;background:rgba(88,28,135,.25)}
+  .amb2{bottom:80px;right:-40px;width:300px;height:300px;background:rgba(8,145,178,.15)}
+  .amb3{bottom:-40px;left:-40px;width:260px;height:260px;background:rgba(190,24,93,.12)}
+
+  .content{position:relative;z-index:1;display:flex;flex-direction:column;min-height:100vh;padding:0 20px}
+  .status{display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.4);padding:12px 0 4px}
+  .header{display:flex;justify-content:space-between;align-items:center;padding:8px 0}
+  .header span{font-size:13px;color:rgba(255,255,255,.4)}
+  .header .title{font-size:13px;font-weight:600;color:rgba(255,255,255,.7);letter-spacing:1.5px;text-transform:uppercase}
+
+  /* mic status */
+  .mic-status{display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 0}
+  .mic-dot{width:8px;height:8px;border-radius:50%}
+  .mic-dot.listening{background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.5);animation:dotpulse 1.5s infinite}
+  .mic-dot.off{background:rgba(255,255,255,.2)}
+  .mic-label{font-size:11px;color:rgba(255,255,255,.4)}
+  .mic-label.listening{color:#22c55e}
+  @keyframes dotpulse{0%,100%{opacity:.6}50%{opacity:1}}
+
+  /* song detection */
+  .song-detect{text-align:center;padding:8px 0 4px}
+  .song-detect .detected{font-size:15px;font-weight:700}
+  .song-detect .sub{font-size:11px;color:rgba(255,255,255,.4);margin-top:2px}
+  .song-detect .waiting{font-size:12px;color:rgba(255,255,255,.25);font-style:italic}
+
+  /* live waveform */
+  .wave-section{padding:6px 0}
+  .waveform{display:flex;align-items:center;justify-content:center;gap:1.5px;height:60px}
+  .wave-bar{width:3px;border-radius:3px;transition:height 80ms ease-out}
+  .wave-times{display:flex;justify-content:space-between;font-size:10px;color:rgba(255,255,255,.35);margin-top:2px}
+
+  /* volume meter */
+  .vol-meter{display:flex;align-items:center;gap:6px;justify-content:center;padding:4px 0}
+  .vol-meter .label{font-size:9px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:1px}
+  .vol-bar-bg{width:120px;height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
+  .vol-bar-fill{height:100%;border-radius:2px;background:linear-gradient(to right,#06b6d4,#a855f7,#ec4899);transition:width 80ms ease-out}
+
+  /* markers on a timeline */
+  .markers{position:relative;height:8px;margin-top:4px}
+  .marker-range{position:absolute;top:1px;height:6px;border-radius:3px;opacity:.7}
+
+  .controls{display:flex;align-items:center;justify-content:center;gap:20px;padding:12px 0}
+
+  /* BIG CAPTURE BUTTON */
+  .capture-wrap{position:relative;display:flex;flex-direction:column;align-items:center}
+  .capture-btn{position:relative;width:80px;height:80px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(135deg,#ec4899,#8b5cf6,#06b6d4);display:flex;align-items:center;justify-content:center;transition:transform .15s,box-shadow .15s;box-shadow:0 0 24px rgba(139,92,246,.35);touch-action:none}
+  .capture-btn:hover{transform:scale(1.04)}
+  .capture-btn .inner-ring{position:absolute;inset:4px;border-radius:50%;border:2.5px solid rgba(255,255,255,.4);pointer-events:none;transition:border-color .2s}
+  .capture-btn .rec-dot{width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .2s,border-radius .2s,background .2s}
+  .capture-btn .glow{position:absolute;inset:-8px;border-radius:50%;background:linear-gradient(135deg,rgba(236,72,153,.2),rgba(139,92,246,.2),rgba(6,182,212,.2));filter:blur(14px);z-index:-1;animation:glowpulse 2s infinite}
+  @keyframes glowpulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+  .capture-btn.recording{transform:scale(1.12);box-shadow:0 0 40px rgba(239,68,68,.5),0 0 80px rgba(239,68,68,.2);background:linear-gradient(135deg,#ef4444,#dc2626,#b91c1c)}
+  .capture-btn.recording .inner-ring{border-color:rgba(255,255,255,.6)}
+  .capture-btn.recording .rec-dot{background:#ef4444;border-radius:5px;transform:scale(.7)}
+
+  .progress-ring{position:absolute;inset:-4px;pointer-events:none}
+  .progress-ring circle{fill:none;stroke-width:3;stroke-linecap:round;transform:rotate(-90deg);transform-origin:50% 50%}
+  .progress-ring .bg{stroke:rgba(255,255,255,.08)}
+  .progress-ring .fg{stroke:#ef4444;transition:stroke-dashoffset .15s linear;filter:drop-shadow(0 0 4px rgba(239,68,68,.6))}
+
+  .capture-label{text-align:center;margin-top:6px;font-size:11px;color:rgba(168,85,247,.6);text-transform:uppercase;letter-spacing:2px;height:18px}
+  .capture-label.recording{color:#ef4444;font-weight:600;animation:recblink 1s infinite}
+  @keyframes recblink{0%,100%{opacity:1}50%{opacity:.4}}
+
+  .rec-duration{font-size:24px;font-weight:700;color:#ef4444;text-align:center;margin-top:2px;height:32px;line-height:32px;font-variant-numeric:tabular-nums;text-shadow:0 0 20px rgba(239,68,68,.4)}
+
+  /* tag panel */
+  .tag-panel{margin:0 0 6px;padding:12px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(139,92,246,.3);backdrop-filter:blur(8px);animation:slidein .25s ease-out}
+  @keyframes slidein{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  .tag-header{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+  .tag-header .dot{width:6px;height:6px;border-radius:50%;background:#a78bfa;animation:dotpulse 1.5s infinite}
+  .tag-header span{font-size:12px;color:rgba(196,181,253,.85);font-weight:500}
+  .tag-header .close{margin-left:auto;color:rgba(255,255,255,.25);font-size:12px;cursor:pointer;background:none;border:none}
+  .ai-hint{font-size:10px;color:rgba(255,255,255,.25);margin:0 0 8px 4px}
+  .tags-grid{display:flex;flex-wrap:wrap;gap:7px;justify-content:center}
+
+  .tag-btn{position:relative;display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:16px;border:1px solid;cursor:pointer;transition:transform .2s,box-shadow .2s;font-size:11px;font-weight:600;color:#fff;background:transparent}
+  .tag-btn:hover{transform:scale(1.05)}
+  .tag-btn:active{transform:scale(.92)}
+  .tag-btn .ai-badge{position:absolute;top:-6px;right:-6px;font-size:9px;background:rgba(255,255,255,.2);backdrop-filter:blur(4px);border-radius:10px;padding:1px 5px;font-weight:700;border:1px solid rgba(255,255,255,.2)}
+  .tag-btn.ai-suggested{box-shadow:0 0 0 2px rgba(255,255,255,.2)}
+  .tag-emoji{font-size:14px}
+
+  .feed{margin-top:6px}
+  .feed-header{display:flex;justify-content:space-between;margin-bottom:5px}
+  .feed-header span{font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:500}
+  .feed-header .label{color:rgba(255,255,255,.35)}
+  .feed-header .count{color:rgba(6,182,212,.5)}
+  .feed-list{display:flex;flex-direction:column;gap:5px;max-height:120px;overflow-y:auto}
+  .feed-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:12px;border:1px solid}
+  .feed-item .info{flex:1;min-width:0}
+  .feed-item .info .name{font-size:11px;font-weight:500}
+  .feed-item .info .time{font-size:9px;color:rgba(255,255,255,.3)}
+  .feed-item .dur{font-size:10px;color:rgba(255,255,255,.5);font-weight:600;font-variant-numeric:tabular-nums}
+
+  .taste-dna{margin-top:10px;padding:10px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);margin-bottom:20px}
+  .taste-dna .label{font-size:10px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
+  .dna-bars{display:flex;gap:4px;height:36px;align-items:flex-end}
+  .dna-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px}
+  .dna-col .bar{width:100%;border-radius:3px 3px 0 0;transition:height .5s}
+  .dna-col .em{font-size:10px}
+
+  .start-overlay{position:fixed;inset:0;z-index:100;background:rgba(9,9,15,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;cursor:pointer}
+  .start-overlay .big{font-size:64px;animation:bounce 1.5s infinite}
+  @keyframes bounce{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+  .start-overlay p{font-size:16px;color:rgba(255,255,255,.6);font-weight:500}
+  .start-overlay .sub{font-size:12px;color:rgba(255,255,255,.3);max-width:280px;text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+
+<div class="phone" id="app">
+  <div class="start-overlay" id="startOverlay" onclick="initApp()">
+    <div class="big">🎧</div>
+    <p>Tap to enable microphone</p>
+    <div class="sub">Play a song on iTunes, Spotify, or any app — then hold the capture button on the parts you love</div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──
+const TAGS = [
+  {id:"romantic",label:"Feels Romantic",emoji:"💜",bg:"rgba(236,72,153,.15)",border:"rgba(236,72,153,.4)",grad:"linear-gradient(to top,#ec4899,#a855f7)"},
+  {id:"energetic",label:"Energetic",emoji:"⚡",bg:"rgba(249,115,22,.15)",border:"rgba(249,115,22,.4)",grad:"linear-gradient(to top,#f59e0b,#f97316)"},
+  {id:"bass",label:"Love That Bass",emoji:"🔊",bg:"rgba(6,182,212,.15)",border:"rgba(6,182,212,.4)",grad:"linear-gradient(to top,#06b6d4,#3b82f6)"},
+  {id:"vocal",label:"This Vocal",emoji:"🎤",bg:"rgba(16,185,129,.15)",border:"rgba(16,185,129,.4)",grad:"linear-gradient(to top,#10b981,#14b8a6)"},
+  {id:"drop",label:"That Drop!",emoji:"💥",bg:"rgba(239,68,68,.15)",border:"rgba(239,68,68,.4)",grad:"linear-gradient(to top,#ef4444,#f43f5e)"},
+  {id:"melody",label:"Sweet Melody",emoji:"🎵",bg:"rgba(139,92,246,.15)",border:"rgba(139,92,246,.4)",grad:"linear-gradient(to top,#8b5cf6,#6366f1)"},
+  {id:"vibe",label:"The Vibe",emoji:"🌊",bg:"rgba(56,189,248,.15)",border:"rgba(56,189,248,.4)",grad:"linear-gradient(to top,#38bdf8,#3b82f6)"},
+  {id:"groove",label:"Sick Groove",emoji:"🕺",bg:"rgba(245,158,11,.15)",border:"rgba(245,158,11,.4)",grad:"linear-gradient(to top,#fbbf24,#f59e0b)"},
+];
+
+let capturedMoments=[], aiSuggestions=["bass","groove"];
+let isRecording=false, recStart=0, recDuration=0, recTimerInterval=null, captureMode=false;
+let listenStartTime=0; // when mic started, acts as our "playback clock"
+
+// ── AUDIO / MIC ──
+let audioCtx=null, analyser=null, micStream=null;
+let freqData=null, timeData=null;
+const NUM_BARS=55;
+const MAX_REC=30;
+const CIRC=2*Math.PI*37; // ~232.5
+
+function getElapsedTime(){
+  if(!listenStartTime) return 0;
+  return (Date.now()-listenStartTime)/1000;
+}
+
+async function initApp(){
+  document.getElementById("startOverlay").style.display="none";
+
+  // Request mic
+  try{
+    micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+  }catch(e){
+    alert("Microphone access is required. Please allow it and refresh.");
+    return;
+  }
+
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  const source=audioCtx.createMediaStreamSource(micStream);
+
+  analyser=audioCtx.createAnalyser();
+  analyser.fftSize=256;
+  analyser.smoothingTimeConstant=0.75;
+  source.connect(analyser);
+
+  freqData=new Uint8Array(analyser.frequencyBinCount);
+  timeData=new Uint8Array(analyser.fftSize);
+
+  listenStartTime=Date.now();
+  buildUI();
+  tick();
+}
+
+// ── AUDIO ANALYSIS HELPERS ──
+function getVolume(){
+  if(!analyser) return 0;
+  analyser.getByteFrequencyData(freqData);
+  let sum=0;
+  for(let i=0;i<freqData.length;i++) sum+=freqData[i];
+  return sum/freqData.length/255; // 0-1
+}
+
+function getBassEnergy(){
+  if(!analyser) return 0;
+  // low bins = bass
+  let sum=0;
+  for(let i=0;i<8;i++) sum+=freqData[i];
+  return sum/8/255;
+}
+
+function getMidEnergy(){
+  if(!analyser) return 0;
+  let sum=0;
+  for(let i=8;i<40;i++) sum+=freqData[i];
+  return sum/32/255;
+}
+
+function getHighEnergy(){
+  if(!analyser) return 0;
+  let sum=0;
+  for(let i=40;i<freqData.length;i++) sum+=freqData[i];
+  return sum/(freqData.length-40)/255;
+}
+
+// AI suggestion based on live audio spectrum
+function computeAiSuggestions(){
+  const b=getBassEnergy(), m=getMidEnergy(), h=getHighEnergy(), v=getVolume();
+  const suggestions=[];
+
+  if(b>0.5) suggestions.push("bass");
+  if(v>0.6 && b>0.4) suggestions.push("drop");
+  if(h>0.3 && m>0.3) suggestions.push("vocal");
+  if(m>0.4 && h<0.2) suggestions.push("melody");
+  if(v>0.4 && b<0.3 && m>0.3) suggestions.push("romantic");
+  if(v>0.5 && b>0.3) suggestions.push("energetic");
+  if(v>0.2 && v<0.45) suggestions.push("vibe");
+  if(b>0.3 && m>0.2) suggestions.push("groove");
+
+  // always return at least 2
+  if(suggestions.length<2){
+    if(!suggestions.includes("vibe")) suggestions.push("vibe");
+    if(!suggestions.includes("melody")) suggestions.push("melody");
+  }
+  return suggestions.slice(0,3);
+}
+
+function fmt(s){const m=Math.floor(s/60);const sec=Math.floor(s%60);return m+":"+String(sec).padStart(2,"0")}
+function fmtDec(s){return s.toFixed(1)+"s"}
+
+// ── UI ──
+function buildUI(){
+  const app=document.getElementById("app");
+  app.innerHTML=`
+    <div class="ambient"><div class="amb1"></div><div class="amb2"></div><div class="amb3"></div></div>
+    <div class="content">
+      <div class="status"><span>9:41</span><span>5G 🔋</span></div>
+      <div class="header"><span>← Back</span><span class="title">Impulse Capture</span><span id="savedCount">0 saved</span></div>
+
+      <div class="mic-status">
+        <div class="mic-dot listening" id="micDot"></div>
+        <div class="mic-label listening" id="micLabel">Microphone listening...</div>
+      </div>
+
+      <div class="song-detect" id="songDetect">
+        <div class="waiting">Play a song — the waveform will react to the music</div>
+      </div>
+
+      <div class="wave-section">
+        <div class="waveform" id="waveform"></div>
+        <div class="vol-meter">
+          <span class="label">Level</span>
+          <div class="vol-bar-bg"><div class="vol-bar-fill" id="volFill" style="width:0%"></div></div>
+        </div>
+        <div class="wave-times"><span id="timeNow">0:00</span><span id="timeLabel">listening</span></div>
+      </div>
+
+      <div class="controls">
+        <div class="capture-wrap">
+          <button class="capture-btn" id="captureBtn">
+            <svg class="progress-ring" viewBox="0 0 88 88"><circle class="bg" cx="44" cy="44" r="37"/><circle class="fg" id="progCircle" cx="44" cy="44" r="37" stroke-dasharray="${CIRC.toFixed(1)}" stroke-dashoffset="${CIRC.toFixed(1)}"/></svg>
+            <div class="inner-ring"></div>
+            <div class="rec-dot" id="recDot"></div>
+            <div class="glow"></div>
+          </button>
+        </div>
+      </div>
+      <div class="rec-duration" id="recDuration"></div>
+      <div class="capture-label" id="captureLabel">Hold to capture the moment</div>
+
+      <div id="tagPanel"></div>
+      <div id="feed"></div>
+      <div id="tasteDna"></div>
+    </div>`;
+
+  // waveform bars
+  const wf=document.getElementById("waveform");
+  for(let i=0;i<NUM_BARS;i++){const b=document.createElement("div");b.className="wave-bar";wf.appendChild(b);}
+
+  // ── HOLD-TO-RECORD (capture button only) ──
+  const capBtn=document.getElementById("captureBtn");
+
+  capBtn.addEventListener("mousedown",e=>{e.preventDefault();e.stopPropagation();startRecording();});
+  capBtn.addEventListener("touchstart",e=>{e.preventDefault();e.stopPropagation();startRecording();},{passive:false});
+
+  function onRelease(e){
+    if(!isRecording) return;
+    stopRecording();
+  }
+  document.addEventListener("mouseup",onRelease);
+  document.addEventListener("touchend",onRelease);
+  document.addEventListener("touchcancel",onRelease);
+}
+
+// ── HOLD-TO-RECORD ──
+function startRecording(){
+  if(captureMode) return;
+  isRecording=true;
+  recStart=getElapsedTime();
+  recDuration=0;
+
+  const btn=document.getElementById("captureBtn");
+  btn.classList.add("recording");
+
+  const label=document.getElementById("captureLabel");
+  label.textContent="● REC — release to save";
+  label.className="capture-label recording";
+
+  recTimerInterval=setInterval(()=>{
+    if(!isRecording) return;
+    recDuration=getElapsedTime()-recStart;
+    if(recDuration>=MAX_REC) stopRecording();
+
+    const dur=document.getElementById("recDuration");
+    if(dur) dur.textContent=fmtDec(recDuration);
+
+    const pct=Math.min(recDuration/MAX_REC,1);
+    const circle=document.getElementById("progCircle");
+    if(circle) circle.style.strokeDashoffset=(CIRC-(CIRC*pct)).toFixed(1);
+  },50);
+}
+
+function stopRecording(){
+  if(!isRecording) return;
+  isRecording=false;
+  clearInterval(recTimerInterval);
+  recDuration=getElapsedTime()-recStart;
+
+  const btn=document.getElementById("captureBtn");
+  btn.classList.remove("recording");
+
+  const circle=document.getElementById("progCircle");
+  if(circle) circle.style.strokeDashoffset=CIRC.toFixed(1);
+
+  if(recDuration<0.3){
+    document.getElementById("recDuration").textContent="";
+    document.getElementById("captureLabel").textContent="Hold to capture the moment";
+    document.getElementById("captureLabel").className="capture-label";
+    return;
+  }
+
+  const dur=document.getElementById("recDuration");
+  if(dur) dur.textContent=fmtDec(recDuration)+" captured!";
+
+  aiSuggestions=computeAiSuggestions();
+  captureMode=true;
+  renderTagPanel();
+}
+
+function selectTag(tagId){
+  capturedMoments.unshift({id:Date.now(),tagId,startTime:recStart,endTime:recStart+recDuration,duration:recDuration});
+  if(capturedMoments.length>30) capturedMoments.pop();
+  captureMode=false;
+  document.getElementById("tagPanel").innerHTML="";
+  document.getElementById("recDuration").textContent="";
+  document.getElementById("captureLabel").textContent="Hold to capture the moment";
+  document.getElementById("captureLabel").className="capture-label";
+  document.getElementById("savedCount").textContent=capturedMoments.length+" saved";
+  renderFeed();
+  renderDna();
+}
+
+function closeTagPanel(){
+  captureMode=false;
+  document.getElementById("tagPanel").innerHTML="";
+  document.getElementById("recDuration").textContent="";
+  document.getElementById("captureLabel").textContent="Hold to capture the moment";
+  document.getElementById("captureLabel").className="capture-label";
+}
+
+function renderTagPanel(){
+  if(!captureMode){document.getElementById("tagPanel").innerHTML="";return;}
+  document.getElementById("captureLabel").textContent="";
+  document.getElementById("captureLabel").className="capture-label";
+  const aiHint=aiSuggestions.map(s=>TAGS.find(t=>t.id===s)?.label).filter(Boolean).join(", ");
+  let html=`<div class="tag-panel">
+    <div class="tag-header"><div class="dot"></div><span>What hit you? (${fmt(recStart)} — ${fmt(recStart+recDuration)})</span><button class="close" onclick="closeTagPanel()">✕</button></div>
+    <div class="ai-hint">AI detected: ${aiHint}</div>
+    <div class="tags-grid">`;
+  TAGS.forEach(tag=>{
+    const isSug=aiSuggestions.includes(tag.id);
+    html+=`<button class="tag-btn ${isSug?"ai-suggested":""}" style="background:${tag.bg};border-color:${tag.border}" onclick="selectTag('${tag.id}')">
+      ${isSug?'<span class="ai-badge">AI</span>':''}
+      <span class="tag-emoji">${tag.emoji}</span>${tag.label}
+    </button>`;
+  });
+  html+=`</div></div>`;
+  document.getElementById("tagPanel").innerHTML=html;
+}
+
+function renderFeed(){
+  const el=document.getElementById("feed");
+  if(!capturedMoments.length){el.innerHTML="";return;}
+  let html=`<div class="feed"><div class="feed-header"><span class="label">Captured Impulses</span><span class="count">${capturedMoments.length} moments</span></div><div class="feed-list">`;
+  capturedMoments.slice(0,5).forEach(m=>{
+    const tag=TAGS.find(t=>t.id===m.tagId);
+    html+=`<div class="feed-item" style="background:${tag.bg};border-color:${tag.border}">
+      <span>${tag.emoji}</span>
+      <div class="info"><div class="name">${tag.label}</div><div class="time">${fmt(m.startTime)} — ${fmt(m.endTime)}</div></div>
+      <div class="dur">${fmtDec(m.duration)}</div>
+    </div>`;
+  });
+  html+=`</div></div>`;
+  el.innerHTML=html;
+}
+
+function renderDna(){
+  const el=document.getElementById("tasteDna");
+  if(capturedMoments.length<3){el.innerHTML="";return;}
+  const totalDur=capturedMoments.reduce((a,m)=>a+m.duration,0);
+  let html=`<div class="taste-dna"><div class="label">Your Taste DNA</div><div class="dna-bars">`;
+  TAGS.forEach(tag=>{
+    const dur=capturedMoments.filter(m=>m.tagId===tag.id).reduce((a,m)=>a+m.duration,0);
+    const pct=totalDur?(dur/totalDur)*100:0;
+    html+=`<div class="dna-col"><div class="bar" style="height:${Math.max(2,pct*.7)}px;background:${tag.grad}"></div><span class="em">${tag.emoji}</span></div>`;
+  });
+  html+=`</div></div>`;
+  el.innerHTML=html;
+}
+
+// ── RENDER LOOP ──
+let audioDetected=false;
+
+function render(){
+  if(!analyser) return;
+  analyser.getByteFrequencyData(freqData);
+
+  const vol=getVolume();
+  const elapsed=getElapsedTime();
+
+  // Volume meter
+  const fill=document.getElementById("volFill");
+  if(fill) fill.style.width=(vol*100)+"%";
+
+  // Time
+  const tn=document.getElementById("timeNow");
+  if(tn) tn.textContent=fmt(elapsed);
+
+  // Song detection hint
+  if(!audioDetected && vol>0.08){
+    audioDetected=true;
+    const sd=document.getElementById("songDetect");
+    if(sd) sd.innerHTML=`<div class="detected">Audio detected</div><div class="sub">In production: auto-identifies song via fingerprinting (ACRCloud/Gracenote)</div>`;
+  }
+
+  // Waveform — driven by REAL mic frequency data
+  const bars=document.querySelectorAll(".wave-bar");
+  const binStep=Math.floor(freqData.length/NUM_BARS);
+  bars.forEach((b,i)=>{
+    const binIdx=Math.min(i*binStep,freqData.length-1);
+    const val=freqData[binIdx]/255;
+    const h=4+val*52;
+    b.style.height=h+"px";
+
+    if(isRecording){
+      const intensity=val;
+      b.style.background=`linear-gradient(to top, rgba(239,68,68,${0.4+intensity*0.6}), rgba(249,115,22,${0.3+intensity*0.5}), rgba(251,191,36,${0.2+intensity*0.4}))`;
+      b.style.boxShadow=val>0.3?`0 0 ${4+val*6}px rgba(239,68,68,.4)`:"none";
+    } else if(vol>0.05){
+      const intensity=val;
+      b.style.background=`linear-gradient(to top, rgba(6,182,212,${0.3+intensity*0.6}), rgba(168,85,247,${0.2+intensity*0.5}), rgba(236,72,153,${0.1+intensity*0.4}))`;
+      b.style.boxShadow=val>0.3?`0 0 ${3+val*4}px rgba(168,85,247,.3)`:"none";
+    } else {
+      b.style.background="rgba(255,255,255,.1)";
+      b.style.boxShadow="none";
+    }
+  });
+
+  // Mic dot brightness based on volume
+  const micDot=document.getElementById("micDot");
+  if(micDot) micDot.style.boxShadow=`0 0 ${6+vol*14}px rgba(34,197,94,${0.3+vol*0.5})`;
+}
+
+function tick(){
+  render();
+  requestAnimationFrame(tick);
+}
+</script>
+</body>
+</html>
